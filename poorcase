@@ -48,7 +48,7 @@ my @files = map { abs_path($_) } @ARGV;
 
 if ( $opts->{build} ) {
     my @mapping;
-    print "Building array named '$opts->{name}' with:\n  @files\n";
+    print "Building array named '$opts->{name}' with:\n\t@files\n";
     foreach my $file ( sort { $a cmp $b } @files ) {
         open( LOSETUP, "-|", "losetup", "--show",
             $opts->{readonly} ? "-fr" : "-f", $file )
@@ -63,7 +63,7 @@ if ( $opts->{build} ) {
             size     => $size / 512,
             loopdev  => $loopdev,
           };
-        printf "file %s (%d 512 byte blocks) loopdev %s\n", $file,
+        printf "\tfile %s (%d 512 byte blocks) loopdev %s\n", $file,
           $size / 512, $loopdev;
     }
 
@@ -74,14 +74,14 @@ if ( $opts->{build} ) {
             $offset, $obj->{size}, $obj->{loopdev} );
         $offset += $obj->{size};
     }
-    print "Base Device Table: ($opts->{name})\n$table\n";
+    print "\nBase Device Table: ($opts->{name})\n$table\n";
     open( DMSETUP, "|-", "dmsetup",
         $opts->{readonly} ? ( "-r", "create" ) : ("create"),
         $opts->{name} )
       or die "Couldn't create device-mapper device ($!)";
     print DMSETUP $table;
     close DMSETUP;
-    print "Parsing partitions and creating devices\n";
+    print "Parsing partitions and creating devices:\n";
     open( PARTX, "-|", "partx", "-l", "/dev/mapper/$opts->{name}" )
       or die "Couldn't get partition table from partx! ($!)";
     my @partitions;
@@ -89,7 +89,7 @@ if ( $opts->{build} ) {
     while (<PARTX>) {
         chomp;
         my ( $num, $start_sect, $end, $length ) =
-          ( $_ =~ m/#\s*(\d+):\s*(\d+)-\s*([-\d]+)\s*\(\s*(\d+)\s*sect/ );
+          ( $_ =~ m/#\s*([-\d]+):\s*([-\d]+?)-\s*([-\d]+)\s*\(\s*(\d+)\s*sect/ );
 
         # ignore empty/nonexistent partitions
         if ( $start_sect ne "0" && $end ne "-1" ) {
@@ -104,11 +104,15 @@ if ( $opts->{build} ) {
         printf DMSETUP "0 %d linear /dev/mapper/%s %d\n",
           $partition->{length},
           $opts->{name}, $partition->{start};
-        printf "0 %d linear /dev/mapper/%s %d (%s%d)\n",
+        printf "Creating partition %d\n0 %d linear /dev/mapper/%s %d (%s%d)\n",
+          $partition->{num},
           $partition->{length},
           $opts->{name}, $partition->{start}, $opts->{name},
           $partition->{num};
         close DMSETUP;
+	if ($? >> 8 != 0) {
+	  print "*** Error detected when attempting to create partition $partition->{num}! ***\n";
+	}
     }
 } elsif ( $opts->{destroy} ) {
     open( DMSETUP, "-|", "dmsetup", "ls" )
