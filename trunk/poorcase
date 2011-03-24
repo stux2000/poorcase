@@ -48,7 +48,7 @@ my @files = map { abs_path($_) } @ARGV;
 
 if ( $opts->{build} ) {
     my @mapping;
-    print "Building array named '$opts->{name}' with:\n\t@files\n";
+    print "Building " . $opts->{readonly} ? "read-only" : "read-write" . " array named '$opts->{name}' with:\n\t@files\n";
     foreach my $file ( sort { $a cmp $b } @files ) {
         open( LOSETUP, "-|", "losetup", "--show",
             $opts->{readonly} ? "-fr" : "-f", $file )
@@ -56,7 +56,12 @@ if ( $opts->{build} ) {
         my $loopdev = <LOSETUP>;
         chomp $loopdev;
         close LOSETUP;
-        my $size = ( stat($file) )[7];
+        open(BLKDEV,"-|","blockdev","--getsz",$loopdev);
+        my $size = <BLKDEV>;
+        chomp $size;
+        $size *=512;
+        #my $blockdev = 'blockdev --getsz'
+        #my $size = ( stat($file) )[7];
         push @mapping,
           {
             filename => $file,
